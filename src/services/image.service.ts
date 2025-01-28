@@ -1,11 +1,11 @@
+import { Collection, CollectionItem } from '@/models/collection';
 import { Injectable } from '@nestjs/common';
-
-import { InscriptionMetadata } from '@/models/inscription';
 
 import { createCanvas, Image, registerFont } from 'canvas';
 import { mkdir, writeFile } from 'fs/promises';
 
 import path from 'path';
+import nodeHtmlToImage from 'node-html-to-image';
 import sharp from 'sharp';
 
 /**
@@ -15,52 +15,50 @@ import sharp from 'sharp';
 export class ImageService {
 
   /**
-   * Generates an image for an inscription
-   * @param hashId The hash ID of the inscription
-   * @param value The value of the inscription
-   * @param txHash The transaction hash of the inscription
-   * @param imageUri The URI of the inscription image
-   * @param collectionMetadata The metadata of the collection
+   * Generates an image for an token
+   * @param tokenId The token ID of the token
+   * @param value The value of the token
+   * @param imageUri The URI of the token image
+   * @param collection The metadata of the collection
+   * @param collectionItem The metadata of the collection item
    * @returns The generated image as a buffer
    */
   async generate(
-    hashId: string,
+    tokenId: string,
     value: string,
-    txHash: string,
     imageUri: string,
-    collectionMetadata: InscriptionMetadata,
+    collection: Collection,
+    collectionItem: CollectionItem
   ) {
     return await (Number(process.env.CARD_GEN_ENABLED) 
-      ? this.generateCardImage(hashId, value, txHash, imageUri, collectionMetadata)
-      : this.generateBasicImage(hashId, value, txHash, imageUri, collectionMetadata)
+      ? this.generateCardImage(tokenId, value, imageUri, collection, collectionItem)
+      : this.generateBasicImage(tokenId, value, imageUri, collection)
     );
   }
 
   /**
-   * Generates a basic image for an inscription
-   * @param hashId The hash ID of the inscription
-   * @param value The value of the inscription
-   * @param txHash The transaction hash of the inscription
-   * @param imageUri The URI of the inscription image
+   * Generates a basic image for an token
+   * @param tokenId The token ID of the token
+   * @param value The value of the token
+   * @param imageUri The URI of the token image
    * @param collectionMetadata The metadata of the collection
    * @returns The generated image as a buffer
    */
   async generateBasicImage(
-    hashId: string,
+    tokenId: string,
     value: string,
-    txHash: string,
     imageUri: string,
-    collectionMetadata: InscriptionMetadata,
+    collectionMetadata: Collection,
   ) {
     // Create a temporary canvas at original size first
     const tempCanvas = createCanvas(1200, 1200);
     const tempCtx = tempCanvas.getContext('2d');
     tempCtx.imageSmoothingEnabled = false;
 
-    const inscriptionImg = await this.createInscriptionImage(imageUri);
+    const tokenImg = await this.createTokenImage(imageUri);
 
     // Calculate height maintaining aspect ratio
-    const aspectRatio = inscriptionImg.height / inscriptionImg.width;
+    const aspectRatio = tokenImg.height / tokenImg.width;
     const scaledHeight = Math.round(1200 * aspectRatio);
 
     // Create final canvas with correct dimensions
@@ -73,8 +71,8 @@ export class ImageService {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Draw image at original size first, then scale
-    tempCtx.drawImage(inscriptionImg, 0, 0, inscriptionImg.width, inscriptionImg.height);
-    ctx.drawImage(tempCanvas, 0, 0, inscriptionImg.width, inscriptionImg.height, 
+    tempCtx.drawImage(tokenImg, 0, 0, tokenImg.width, tokenImg.height);
+    ctx.drawImage(tempCanvas, 0, 0, tokenImg.width, tokenImg.height, 
                  0, 0, canvas.width, canvas.height);
 
     // Convert to buffer
@@ -84,22 +82,21 @@ export class ImageService {
   }
 
   /**
-   * Generates an image for an inscription
-   * @param hashId The hash ID of the inscription
-   * @param value The value of the inscription
-   * @param txHash The transaction hash of the inscription
-   * @param imageUri The URI of the inscription image
+   * Generates an image for an token
+   * @param tokenId The token ID of the token
+   * @param value The value of the token
+   * @param imageUri The URI of the token image
    * @param collectionMetadata The metadata of the collection
    * @returns The generated image as a buffer
    */
   async generateCardImage(
-    hashId: string,
+    tokenId: string,
     value: string,
-    txHash: string,
     imageUri: string,
-    collectionMetadata: InscriptionMetadata,
+    collection: Collection,
+    collectionItem: CollectionItem
   ) {
-    const { collectionName, collectionImageUri, websiteLink } = collectionMetadata;
+    const { name, logoImageUri, websiteLink } = collection;
 
     // Register custom font
     registerFont(
@@ -129,8 +126,8 @@ export class ImageService {
 
     // Add collection image
     const collectionImageSize = 100;
-    if (collectionImageUri) {
-      const collectionImage = await fetch(collectionImageUri);
+    if (logoImageUri) {
+      const collectionImage = await fetch(logoImageUri);
       const collectionImageBuffer = await collectionImage.arrayBuffer();
       const collectionImageData = new Uint8Array(collectionImageBuffer);
       const collectionImg = new Image();
@@ -149,23 +146,26 @@ export class ImageService {
     ctx.font = 'normal 60px RetroComputer';
     const collectionNameHeight = 50;
     ctx.fillText(
-      collectionName.toUpperCase(),
-      collectionImageUri ? (padding + collectionImageSize + 40) : (padding + 10),
+      name.toUpperCase(),
+      logoImageUri ? (padding + collectionImageSize + 40) : (padding + 10),
       padding + collectionNameHeight + 5,
     );
 
     // Add collection url
-    ctx.fillStyle = backgroundColor;
-    ctx.font = 'normal 30px RetroComputer';
-    const collectionUrl = websiteLink.replace('https://', '');
-    const collectionUrlHeight = 20;
-    ctx.fillText(
-      collectionUrl.toUpperCase(),
-      collectionImageUri ? (padding + collectionImageSize + 40) : (padding + 10),
-      padding + collectionNameHeight + collectionUrlHeight + 30,
-    );
+    let collectionUrlHeight = 0;
+    if (websiteLink) {
+      ctx.fillStyle = backgroundColor;
+      ctx.font = 'normal 30px RetroComputer';
+      const collectionUrl = websiteLink.replace('https://', '');
+      collectionUrlHeight = 20;
+      ctx.fillText(
+        collectionUrl.toUpperCase(),
+        logoImageUri ? (padding + collectionImageSize + 40) : (padding + 10),
+        padding + collectionNameHeight + collectionUrlHeight + 30,
+      );
+    }
 
-    const inscriptionImg = await this.createInscriptionImage(imageUri);
+    const tokenImg = await this.createTokenImage(imageUri);
     const imageWidth = canvasWidth - (padding * 2) - borderWidth;
     const imageHeight = canvasWidth - (padding * 2) - borderWidth;
 
@@ -178,9 +178,9 @@ export class ImageService {
       imageHeight,
     );
     
-    // Add the inscription image
+    // Add the token image
     ctx.drawImage(
-      inscriptionImg,
+      tokenImg,
       padding + borderWidth / 2,
       padding + collectionNameHeight + collectionUrlHeight + 50 + (padding / 2) + borderWidth / 2,
       imageWidth,
@@ -197,15 +197,15 @@ export class ImageService {
       canvasWidth - (padding * 2),
     );
 
-    // Add ethscription name to bottom under image
+    // Add token name to bottom under image
     ctx.fillStyle = textColor;
     ctx.font = 'normal 80px RetroComputer';
-    const itemNameWidth = ctx.measureText(collectionMetadata.itemName).width;
+    const itemNameWidth = ctx.measureText(collectionItem.name).width;
     if (itemNameWidth > canvasWidth - (padding * 2)) {
       ctx.font = 'normal 60px RetroComputer';
     }
     ctx.fillText(
-      collectionMetadata.itemName.toUpperCase(),
+      collectionItem.name.toUpperCase(),
       padding,
       canvasHeight - padding,
     );
@@ -215,61 +215,119 @@ export class ImageService {
 
   /**
    * Creates an image from a data URI (SVG or PNG)
-   * @param imageUri The URI of the inscription image
+   * @param imageUri The URI of the token image
    * @returns The generated image as a buffer
    */
-  async createInscriptionImage(imageUri: string) {
-    // Create Image
-    const inscriptionImg = new Image();
+  async createTokenImage(imageUri: string): Promise<Image> {
     try {
       let imageBuffer: Buffer;
-      if (imageUri.startsWith('data:image/svg+xml')) {
-        // Convert URL-encoded SVG data URI to buffer
-        const svgContent = decodeURIComponent(imageUri.split(',')[1]);
-        const svgBuffer = Buffer.from(svgContent);
-        // Convert SVG to PNG using Sharp
-        imageBuffer = await sharp(svgBuffer)
-          .png()
-          .toBuffer();
+  
+      if (imageUri.startsWith('data:image/svg+xml;base64,')) {
+        // Decode base64 SVG
+        const svgContent = Buffer.from(
+          imageUri.replace('data:image/svg+xml;base64,', ''),
+          'base64'
+        ).toString('utf-8');
+        
+        // Convert SVG to PNG buffer using node-html-to-image
+        imageBuffer = await nodeHtmlToImage({
+          puppeteerArgs: { args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+          encoding: 'binary',
+          html: `
+            <html>
+              <head>
+                <style>
+                  body {
+                    margin: 0;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 1200px;
+                    height: 1200px;
+                  }
+                  svg {
+                    width: 100%;
+                    height: auto;
+                  }
+                </style>
+              </head>
+              <body>
+                ${svgContent}
+              </body>
+            </html>
+          `,
+        }) as Buffer;
+      } else if (imageUri.endsWith('.svg')) {
+        // Fetch SVG content and render to PNG buffer
+        const response = await fetch(imageUri);
+        const svgContent = await response.text();
+  
+        imageBuffer = await nodeHtmlToImage({
+          puppeteerArgs: { args: ['--no-sandbox', '--disable-setuid-sandbox'] },
+          encoding: 'binary',
+          html: `
+            <html>
+              <head>
+                <style>
+                  body {
+                    margin: 0;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    width: 1200px;
+                    height: 1200px;
+                  }
+                  svg {
+                    width: 100%;
+                    height: auto;
+                  }
+                </style>
+              </head>
+              <body>
+                ${svgContent}
+              </body>
+            </html>
+          `,
+        }) as Buffer;
       } else {
-        // Regular URL - fetch and convert if SVG
+        // Handle non-SVG formats (e.g., PNG, JPEG)
         const response = await fetch(imageUri);
         const arrayBuffer = await response.arrayBuffer();
-        const fetchedBuffer = Buffer.from(arrayBuffer);
-        
-        if (imageUri.endsWith('.svg')) {
-          imageBuffer = await sharp(fetchedBuffer)
-            .png()
-            .toBuffer();
-        } else {
-          imageBuffer = fetchedBuffer;
-        }
+        const buffer = Buffer.from(arrayBuffer);
+  
+        // Convert to PNG if not already in PNG format
+        imageBuffer = await sharp(buffer).toFormat('png').toBuffer();
       }
-      
-      inscriptionImg.src = imageBuffer;
+  
+      // Create an Image object from the buffer
+      const image = new Image();
+      image.src = imageBuffer;
+  
+      return image;
     } catch (error) {
-      console.error('Error loading inscription image:', error);
+      console.error('Error creating token image:', error);
+      throw new Error('Failed to create token image');
     }
-
-    return inscriptionImg;
   }
 
   /**
    * Saves an image to a file
    * @param collectionName The name of the collection
-   * @param hashId The hash ID of the inscription
+   * @param tokenId The token ID of the token
    * @param imageBuffer The image to save
    */
   async saveImage(
     collectionName: string,
-    hashId: string,
+    tokenId: string,
     imageBuffer: Buffer,
   ) {
     const folderPath = path.join(__dirname, `../../_static`);
     await mkdir(folderPath, { recursive: true });
 
     await writeFile(
-      path.join(folderPath, `${collectionName}--${hashId}.png`),
+      path.join(folderPath, `${collectionName}--${tokenId}.png`),
       imageBuffer,
     );
   }

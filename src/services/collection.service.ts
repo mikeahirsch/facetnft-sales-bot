@@ -4,20 +4,19 @@ import { UtilService } from '@/services/util.service';
 
 import { collections } from '@/constants/collections';
 
-import { JSONCollection } from '@/models/collection';
-import { InscriptionMetadata } from '@/models/inscription';
+import { Collection, CollectionItem } from '@/models/collection';
 
 /**
- * Service for managing Ethscription collection data and metadata
+ * Service for managing NFT collection data and metadata
  */
 @Injectable()
 export class CollectionService implements OnModuleInit {
   
   /**
-   * In-memory cache mapping inscription hash IDs to collection metadata
-   * Key format: inscription:<lowercase_hash_id>
+   * In-memory cache mapping of collection metadata
+   * Key format: collection:<contract_address>
    */
-  memoryCache: Map<string, InscriptionMetadata> = new Map();
+  memoryCache: Map<string, Collection> = new Map();
 
   constructor(private readonly utilSvc: UtilService) {}
 
@@ -29,16 +28,48 @@ export class CollectionService implements OnModuleInit {
   }
 
   /**
-   * Looks up collection metadata for a given inscription hash ID
+   * Looks up collection metadata for a given contract address
    * 
-   * @param hashId - The Ethscription hash ID to look up
-   * @returns Collection metadata object if inscription is from a supported collection, undefined otherwise
+   * @param contractAddress - The contract address to look up
+   * @returns Collection metadata object
    */
-  getSupportedInscription(hashId: string): InscriptionMetadata | undefined {
-    if (!hashId) return;
+  getCollection(contractAddress: string): Collection | undefined {
+    if (!contractAddress) return;
   
-    const cacheKey = `inscription:${hashId.toLowerCase()}`;
+    const cacheKey = `collection:${contractAddress.toLowerCase()}`;
+    
     return this.memoryCache.get(cacheKey);
+  }
+  
+  /**
+   * Fetches metadata for a specific token in a collection
+   * @param contractAddress - The contract address of the collection
+   * @param tokenId - The ID of the token to fetch
+   * @returns Token metadata object
+   */
+  async getToken(contractAddress: string, tokenId: string) {
+    try {
+      const response = await fetch(
+        `https://api.facetswap.com/collection_items/${contractAddress.toLowerCase()}/${tokenId}`
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch token metadata for contract ${contractAddress} and token ID ${tokenId}`
+        );
+      }
+
+      const res = await response.json();
+
+      // Convert response keys to camelCase
+      return this.utilSvc.toCamelCase(res.result) as CollectionItem;
+    } catch (error) {
+      Logger.error(
+        `Error fetching token metadata for contract ${contractAddress} and token ID ${tokenId}: ${error}`,
+        'CollectionService'
+      );
+      throw error;
+    }
   }
 
   /**
@@ -48,37 +79,18 @@ export class CollectionService implements OnModuleInit {
   async loadSupportedCollections() {
     try {
       for (const collection of collections) {
-        const response = await fetch(collection);
+        const response = await fetch(`https://api.facetswap.com/collections/${collection}`);
+        
         if (!response.ok) {
           throw new Error(`Failed to fetch collection: ${collection}`);
         }
+        
+        const { result } = await response.json() as { result: Collection };
+        
+        const cacheKey = `collection:${collection.toLowerCase()}`;
+        this.memoryCache.set(cacheKey, this.utilSvc.toCamelCase(result));
 
-        // TODO: Fix this
-        // Currently supports standard metadata and emblem vault metadata
-        const data = await response.json() as JSONCollection | any;
-
-        const collectionName = data.name;
-        const collectionImageHash = this.utilSvc.extractHex(data.logo_image_uri || data.inscription_icon);
-        const backgroundColor = data.background_color;
-        const websiteLink = data.website_link;
-
-        for (const item of (data.collection_items || (data as any).inscriptions)) {
-          const hashId = item.ethscription_id?.toLowerCase() || item.id?.toLowerCase();
-          if (hashId) {
-            const cacheKey = `inscription:${hashId}`;
-            const cacheData = {
-              collectionName,
-              collectionImageHash,
-              itemName: item.name || item.meta.name,
-              backgroundColor,
-              websiteLink,
-              collectionImageUri: data.logo_image_uri || data.inscription_icon,
-            };
-            this.memoryCache.set(cacheKey, cacheData);
-          }
-        }
-
-        Logger.log(`Loaded ${data.name} collection`, 'CollectionService');
+        Logger.log(`Loaded ${result.name} collection`, 'CollectionService');
       }
     } catch (error) {
       console.error('Failed to load collections:', error);

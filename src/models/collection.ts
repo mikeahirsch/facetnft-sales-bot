@@ -1,27 +1,71 @@
-export interface JSONItemAttribute {
-  trait_type: string;
-  value: string | number;
+export interface AttributeCounts {
+  [attribute: string]: { [trait: string]: string };
 }
 
-export interface JSONInscription {
-  ethscription_id: string;
-  name: string;
-  description: string;
-  external_url: string;
-  background_color: string;
-  item_index: number;
-  item_attributes: JSONItemAttribute[];
+export interface CollectionStats {
+  [key: string]: any;
 }
 
-export interface JSONCollection {
+export interface Collection {
+  id: string;
+  name: string;
+  symbol: string;
+  slug: string;
+  assetType: string;
+  assetContract: string;
+  verified: boolean;
+  featured: boolean;
+  logoImageUri: string;
+  bannerImageUri: string | null;
+  backgroundColor: string | null;
+  totalSupply: string;
+  description: string;
+  attributeCounts: AttributeCounts;
+  twitterLink: string | null;
+  discordLink: string | null;
+  websiteLink: string | null;
+  stats: CollectionStats;
+  dailyVolume: string;
+  allTimeVolume: string;
+  dailySaleCount: string;
+  allTimeSaleCount: string;
+  uniqueHolderCount: string;
+  numberListed: string;
+  floorPrice: string;
+  createdAt: string;
+  updatedAt: string;
+  rarityEnabled: boolean;
+}
+
+export interface TokenUri {
+  name: string;
+  image: string;
+  attributes: Array<{
+    value: string;
+    traitType: string;
+  }>;
+  description: string;
+}
+
+export interface CollectionItem {
+  id: string;
+  assetContract: string;
+  tokenUri: TokenUri;
+  owner: string;
+  assetId: string;
+  assetType: string;
+  compositeAssetId: string;
   name: string;
   description: string;
-  total_supply: number;
-  logo_image_uri: string;
-  banner_image_uri: string;
-  background_color: string;
-  twitter_link: string;
-  website_link: string;
-  discord_link: string;
-  collection_items: JSONInscription[];
+  externalUrl: string | null;
+  backgroundColor: string | null;
+  metadataLastRefreshedAt: string; // ISO date string
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+  rarityRank: string;
+  rarityScore: string;
+  offers: any[]; // Define structure if offers data is known
+  highestBid: any | null; // Define structure if highestBid data is known
+  lowestListing: any | null; // Define structure if lowestListing data is known
 }
+

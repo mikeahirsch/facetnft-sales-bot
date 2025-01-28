@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import _ from 'lodash';
 
 @Injectable()
 export class UtilService {
@@ -64,5 +65,20 @@ export class UtilService {
   formatAddress(address: string, length = 4) {
     address = address.toLowerCase();
     return `0x${address.slice(2, length + 2)}...${address.slice(-length)}`;
+  }
+
+  /**
+   * Converts all keys in an object to camelCase recursively
+   * @param obj The object to convert
+   * @returns A new object with camelCase keys
+   */
+  public toCamelCase(obj: any): any {
+    if (_.isArray(obj)) {
+      return obj.map(this.toCamelCase.bind(this));
+    } else if (_.isObject(obj)) {
+      return _.mapValues(_.mapKeys(obj, (v, k) => _.camelCase(k)), this.toCamelCase.bind(this));
+    } else {
+      return obj;
+    }
   }
 }

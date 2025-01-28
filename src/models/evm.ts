@@ -15,10 +15,11 @@ export interface Market {
 }
 
 export interface EventTargets {
-  hashIdTarget: string;
+  tokenIdTarget: string;
   valueTarget: string;
   sellerTarget: string;
   buyerTarget: string;
+  collectionTarget: string;
 }
 
 export interface Events {

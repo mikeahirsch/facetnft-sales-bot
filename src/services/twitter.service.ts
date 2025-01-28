@@ -41,7 +41,11 @@ export class TwitterService {
         process.env.TWITTER_USERNAME,
         process.env.TWITTER_PASSWORD,
         process.env.TWITTER_EMAIL,
-        process.env.TWITTER_TWO_FACTOR_SECRET
+        process.env.TWITTER_TWO_FACTOR_SECRET,
+        process.env.TWITTER_APP_KEY,
+        process.env.TWITTER_APP_SECRET,
+        process.env.TWITTER_ACCESS_TOKEN,
+        process.env.TWITTER_ACCESS_SECRET
       );
 
       // Save the new cookies

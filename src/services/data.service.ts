@@ -1,11 +1,10 @@
-import { InscriptionAPIResponse } from '@/models/inscription';
 import { Injectable, OnModuleInit } from '@nestjs/common';
 
 import { config } from 'dotenv';
 config();
 
 /**
- * Service for fetching Ethscription data from the Ethscriptions API
+ * Service for fetching data from the third party APIs
  */
 @Injectable()
 export class DataService implements OnModuleInit {
@@ -44,19 +43,5 @@ export class DataService implements OnModuleInit {
       console.log(error);
       return 0;
     }
-  }
-
-  /**
-   * Fetches inscription data for a given hash ID from the Ethscriptions API
-   * 
-   * @param hashId - The hash ID of the inscription to fetch
-   * @returns The inscription data if found, undefined otherwise
-   */
-  async fetchInscriptionByHashId(hashId: string): Promise<InscriptionAPIResponse | undefined> {
-    const ethscriptionsApiBaseUrl = process.env.ETHSCRIPTIONS_API_BASE_URL;
-    const url = `${ethscriptionsApiBaseUrl}/ethscriptions/${hashId}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    return data?.result;
   }
 }

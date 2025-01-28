@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { AbiEvent, createPublicClient, fromHex, http, parseAbiItem } from 'viem';
-import { mainnet } from 'viem/chains';
+import { AbiEvent, parseAbiItem } from 'viem';
 
 import { UtilService } from '@/services/util.service';
 
@@ -9,6 +8,8 @@ import { Market, MarketplaceEvent } from '@/models/evm';
 
 import EventEmitter from 'events';
 import { config } from 'dotenv';
+import { viem as facetViem } from '@0xfacet/sdk';
+import axios from 'axios';
 config();
 
 /**
@@ -17,10 +18,7 @@ config();
 @Injectable()
 export class EvmService {
 
-  private client = createPublicClient({
-    chain: mainnet,
-    transport: http(process.env.RPC_URL)
-  });
+  private client = facetViem.createFacetPublicClient(1)
 
   constructor(private readonly utilSvc: UtilService) {}
   
@@ -99,16 +97,53 @@ export class EvmService {
   async getTransactionReceipt(transactionHash: `0x${string}`) {
     return await this.client.getTransactionReceipt({ hash: transactionHash });
   }
-
+  
   /**
-   * Retrieves the image data URI from an ethscription transaction by its hash ID
-   * @param hashId The hash ID of the ethscription transaction containing the image
-   * @returns The data URI string containing the image data, or null if not found
+   * Retrieves the tokenURI for a given NFT contract and token ID
+   * @param contractAddress The address of the NFT contract
+   * @param tokenId The token ID for which the URI is to be fetched
+   * @returns The token URI string, or null if not found or an error occurs
    */
-  async getInscriptionImageFromHashId(hashId: `0x${string}`): Promise<string | null> {
-    const tx = await this.client.getTransaction({ hash: hashId });
-    const dataURI = fromHex(tx.input, 'string');
-    return dataURI || null;
+  async getTokenURI(contractAddress: `0x${string}`, tokenId: bigint): Promise<string | null> {
+    try {
+      // Call the `tokenURI` method on the contract
+      const tokenURI: string = await this.client.readContract({
+        address: contractAddress,
+        abi: [
+          {
+            type: 'function',
+            name: 'tokenURI',
+            inputs: [{ name: 'tokenId', type: 'uint256' }],
+            outputs: [{ name: '', type: 'string' }],
+            stateMutability: 'view',
+          },
+        ],
+        functionName: 'tokenURI',
+        args: [tokenId],
+      });
+
+      if (tokenURI.startsWith('data:application/json;base64,')) {
+        // Decode Base64-encoded JSON metadata
+        const base64Data = tokenURI.replace('data:application/json;base64,', '');
+        const jsonString = Buffer.from(base64Data, 'base64').toString('utf-8');
+        return JSON.parse(jsonString);
+      } else if (tokenURI.startsWith('ipfs://')) {
+        // Convert IPFS URI to a public gateway URL
+        const ipfsGatewayURL = tokenURI.replace('ipfs://', 'https://ipfs.io/ipfs/');
+        const response = await axios.get(ipfsGatewayURL, { responseType: 'json' });
+        return response.data;
+      } else if (tokenURI.startsWith('http://') || tokenURI.startsWith('https://')) {
+        // Fetch JSON metadata from HTTP(S) URL
+        const response = await axios.get(tokenURI, { responseType: 'json' });
+        return response.data;
+      } else {
+        console.warn('Unsupported tokenURI format:', tokenURI);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error fetching tokenURI for contract ${contractAddress} and tokenId ${tokenId}:`, error);
+      return null;
+    }
   }
 
   /**

@@ -64,9 +64,9 @@ export class AppService implements OnModuleInit {
   }
 
   /**
-   * Handles marketplace events by processing sale logs and fetching inscription data
+   * Handles marketplace events by processing sale logs and fetching token data
    * 
-   * @param market - The marketplace where the sale occurred (e.g. Ethscriptions.com, Etch Market)
+   * @param market - The marketplace where the sale occurred (e.g. Facet NFT)
    * @param marketEvent - Details about the specific event type being handled
    * @param logs - Array of event logs containing sale data
    */
@@ -104,50 +104,37 @@ export class AppService implements OnModuleInit {
       log.args = { ...log.args, ...decoded.args };
     }
     
-    // Ordex returns the hashId as a uint256 (👎)
-    let hashId = log.args[marketEvent.hashIdTarget];
-    if (typeof hashId === 'bigint') {
-      hashId = toHex(hashId);
-      // Ensure hashId is bytes32 (32 bytes = 64 hex chars + '0x' prefix = 66 chars)
-      if (hashId.length < 66) {
-        hashId = hashId.replace('0x', '0x' + '0'.repeat(66 - hashId.length));
-      }
-    }
     const value = formatUnits(log.args[marketEvent.valueTarget], 18);
     const seller = log.args[marketEvent.sellerTarget];
     const buyer = log.args[marketEvent.buyerTarget];
+    const tokenId = log.args[marketEvent.tokenIdTarget].toString();
+    const collectionAddress = log.args[marketEvent.collectionTarget];
 
     // Check if it's supported
-    const collectionMetadata = this.collectionSvc.getSupportedInscription(hashId);
-    if (!collectionMetadata) return;
+    const collection = this.collectionSvc.getCollection(collectionAddress);
+    if (!collection) return;
 
-    // Get the collection image
-    if (collectionMetadata.collectionImageHash) {
-      const collectionImage = await this.evmSvc.getInscriptionImageFromHashId(collectionMetadata.collectionImageHash);
-      if (collectionImage) collectionMetadata.collectionImageUri = collectionImage;
-    }
+    Logger.log(`New event from supported collection: ${collection.name}`, 'AppService');
 
-    Logger.log(`New event from supported collection: ${collectionMetadata.collectionName}`, 'AppService');
-
-    // Get the inscription data
-    const inscriptionImageUri = await this.evmSvc.getInscriptionImageFromHashId(hashId);
-    if (!inscriptionImageUri) return;
+    // Get the token data
+    const collectionItem = await this.collectionSvc.getToken(collectionAddress, tokenId);
+    if (!collectionItem) return;
 
     // Generate the image
-    const imageAttachment = await this.imageSvc.generate(hashId, value, txHash, inscriptionImageUri, collectionMetadata);
-
-    const [buyerEns, sellerEns] = await Promise.all([
-      this.evmSvc.getEnsName(buyer),
-      this.evmSvc.getEnsName(seller),
-    ]);
+    const imageAttachment = await this.imageSvc.generate(tokenId, value, collectionItem.tokenUri.image, collection, collectionItem);
+    
+    // const [buyerEns, sellerEns] = await Promise.all([
+    //   this.evmSvc.getEnsName(buyer),
+    //   this.evmSvc.getEnsName(seller),
+    // ]);
 
     // Create the notification message
     const notificationMessage: NotificationMessage = {
-      title: `${collectionMetadata.itemName} was sold`,
-      message: `From: ${sellerEns || this.utilSvc.formatAddress(seller)}\nTo: ${buyerEns || this.utilSvc.formatAddress(buyer)}\n\nFor: ${value} ETH ($${this.utilSvc.formatCash(Number(value) * this.dataSvc.usdPrice)})`,
-      link: `https://etherscan.io/tx/${txHash}`,
+      title: `${collectionItem.name} was sold`,
+      message: `From: ${this.utilSvc.formatAddress(seller)}\nTo: ${this.utilSvc.formatAddress(buyer)}\n\nFor: ${value} ETH ($${this.utilSvc.formatCash(Number(value) * this.dataSvc.usdPrice)})`,
+      link: `https://explorer.facet.org/tx/${txHash}`,
       imageBuffer: imageAttachment,
-      filename: `${hashId}.png`,
+      filename: `${tokenId}.png`,
     };
 
     // Post to twitter
@@ -155,7 +142,7 @@ export class AppService implements OnModuleInit {
 
     // Save the image
     if (Number(process.env.SAVE_IMAGES)) {
-      await this.imageSvc.saveImage(collectionMetadata.collectionName, hashId, imageAttachment);
+      await this.imageSvc.saveImage(collection.name, tokenId, imageAttachment);
     }
   }
 
