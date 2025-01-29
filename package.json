@@ -25,6 +25,7 @@
     "dotenv": "^16.4.7",
     "lodash": "^4.17.21",
     "node-html-to-image": "^5.0.0",
+    "puppeteer": "^24.1.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.2.0",
     "sharp": "^0.33.5",

@@ -7,6 +7,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import nodeHtmlToImage from 'node-html-to-image';
 import sharp from 'sharp';
+import puppeteer from 'puppeteer';
 
 /**
  * Service for generating notification images
@@ -220,6 +221,9 @@ export class ImageService {
    */
   async createTokenImage(imageUri: string): Promise<Image> {
     try {
+      console.log('Puppeteer cache directory:', process.env.PUPPETEER_CACHE_DIR);
+      console.log('Puppeteer executable path:', puppeteer.executablePath());
+      
       let imageBuffer: Buffer;
   
       if (imageUri.startsWith('data:image/svg+xml;base64,')) {
