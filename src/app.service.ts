@@ -129,11 +129,9 @@ export class AppService implements OnModuleInit {
       imageBuffer: imageAttachment,
       filename: `${tokenId}.png`,
     };
-    
-    console.log(notificationMessage)
 
     // Post to twitter
-    // await this.twitterSvc.sendTweet(notificationMessage);
+    await this.twitterSvc.sendTweet(notificationMessage);
 
     // Save the image
     if (Number(process.env.SAVE_IMAGES)) {
