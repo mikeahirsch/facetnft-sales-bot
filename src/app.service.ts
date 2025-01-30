@@ -56,8 +56,8 @@ export class AppService implements OnModuleInit {
         // Example usage
         const eventEmitter = this.evmSvc.watchEvent(market, marketEvent);
         Logger.log(`Watching event <${marketEvent.name}> on ${market.marketplaceName}`, 'AppService');
-        eventEmitter.on('event', (logs: Log[]) => {
-          this.handleEvent(market, marketEvent, logs);
+        eventEmitter.on('event', (logs: Log<bigint, number, boolean, AbiEvent>[]) => {
+          logs.map((log) => this.handleEvent(market, marketEvent, log));
         });
       }
     }
@@ -73,14 +73,10 @@ export class AppService implements OnModuleInit {
   async handleEvent(
     market: Market, 
     marketEvent: MarketplaceEvent, 
-    logs: Log[]
+    log: Log<bigint, number, boolean, AbiEvent>
   ) {
-    // Logger.log(`New event: ${market.marketplaceName} -- ${marketEvent.name}`, 'AppService');
+    Logger.log(`New event: ${market.marketplaceName} -- ${marketEvent.name}`, 'AppService');
 
-    if (!logs.length) return;
-
-    const eventType = parseAbiItem(marketEvent.signature) as AbiEvent;
-    const log = logs[0] as (Log<bigint, number, boolean, typeof eventType> | undefined);
     if (!log) return;
 
     const txHash = log.transactionHash;
@@ -89,10 +85,7 @@ export class AppService implements OnModuleInit {
       // Get the transaction receipt
       const receipt = await this.evmSvc.getTransactionReceipt(txHash);
       // Find the matching log for main event
-      const matchingLog = receipt.logs.find((log: Log<bigint, number, boolean, typeof eventType>) => 
-        log.address.toLowerCase() === marketEvent.eventTrigger.address.toLowerCase() &&
-        log.topics[0] === toEventHash(marketEvent.signature)
-      );
+      const matchingLog = receipt.logs.find((_log: Log<bigint, number, boolean, AbiEvent>) => _log.logIndex === log.logIndex);
       if (!matchingLog) return;
       // Decode the event trigger log
       const decoded = decodeEventLog({
@@ -136,9 +129,11 @@ export class AppService implements OnModuleInit {
       imageBuffer: imageAttachment,
       filename: `${tokenId}.png`,
     };
+    
+    console.log(notificationMessage)
 
     // Post to twitter
-    await this.twitterSvc.sendTweet(notificationMessage);
+    // await this.twitterSvc.sendTweet(notificationMessage);
 
     // Save the image
     if (Number(process.env.SAVE_IMAGES)) {
@@ -166,7 +161,7 @@ export class AppService implements OnModuleInit {
           Number(process.env.TEST_WITH_HISTORY)
         );
         for (const log of saleLogs) {
-          await this.handleEvent(market, marketEvent, [log]);
+          await this.handleEvent(market, marketEvent, log);
         }
       }
     }
@@ -195,7 +190,7 @@ export class AppService implements OnModuleInit {
           }
         );
         for (const log of saleLogs) {
-          await this.handleEvent(market, marketEvent, [log]);
+          await this.handleEvent(market, marketEvent, log);
         }
       }
     }
